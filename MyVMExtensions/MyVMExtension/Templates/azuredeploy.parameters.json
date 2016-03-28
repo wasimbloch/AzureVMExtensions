@@ -1,0 +1,30 @@
+﻿{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "Southeast Asia"
+    },
+    "virtualNetworkName": {
+      "value": "nsgdemoVNet1"
+    },
+    "addressPrefix": {
+      "value": "10.0.0.0/16"
+    },
+    "FESubnetPrefix": {
+      "value": "10.0.0.0/24"
+    },
+    "FENSGName": {
+      "value": "fensg1"
+    },
+   "FENicName": {
+          "value": "FENic1"
+      },
+   "FEPublicIPDnsName": {
+          "value": "fepublicdns1"
+      },
+      "fewinvmName": {
+          "value": "fewinvm1"
+      }
+  }
+}

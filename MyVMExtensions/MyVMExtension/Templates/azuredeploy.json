@@ -1,0 +1,311 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "Southeast Asia",
+      "metadata": {
+        "description": "This is the region where the resources will be created"
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "defaultValue": "nsgdemoVNet",
+      "metadata": {
+        "description": "This is your Virtual Network"
+      }
+    },
+    "addressPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.0.0/16",
+      "metadata": {
+        "description": "The CIDR address space for your Virtual Network in Azure"
+      }
+    },
+    "FESubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.0.0/24",
+      "metadata": {
+        "description": "This is CIDR prefix for the FrontEnd Subnet"
+      }
+    },
+    "FENSGName": {
+      "type": "string",
+      "defaultValue": "FE_NSG",
+      "metadata": {
+        "description": "This is name of the networkSecurityGroup that will be assigned to FrontEnd Subnet"
+      }
+    },
+    "nsgdemostorageType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_ZRS",
+        "Standard_GRS",
+        "Standard_RAGRS",
+        "Premium_LRS"
+      ]
+    },
+    "FENicName": {
+      "type": "string",
+      "defaultValue": "FENic",
+      "minLength": 1
+    },
+    "FEPublicIPDnsName": {
+      "type": "string",
+      "defaultValue": "fepublicdns",
+      "minLength": 1
+    },
+    "fewinvmName": {
+      "type": "string",
+      "defaultValue": "fewinvm",
+      "minLength": 1
+    },
+    "fewinvmAdminUserName": {
+      "type": "string",
+      "defaultValue": "changeme",
+      "minLength": 1
+    },
+    "fewinvmAdminPassword": {
+      "type": "securestring",
+      "defaultValue": "changeme"
+    },
+    "fewinvmWindowsOSVersion": {
+      "type": "string",
+      "defaultValue": "2012-R2-Datacenter",
+      "allowedValues": [
+        "2008-R2-SP1",
+        "2012-Datacenter",
+        "2012-R2-Datacenter",
+        "Windows-Server-Technical-Preview"
+      ]
+    },
+      "_artifactsLocation": {
+          "type": "string",
+          "metadata": {
+              "description": "Auto-generated container in staging storage account to receive post-build staging folder upload"
+          }
+      },
+      "_artifactsLocationSasToken": {
+          "type": "securestring",
+          "metadata": {
+              "description": "Auto-generated token to access _artifactsLocation"
+          }
+      },
+      "projectName": {
+          "type": "string",
+          "minLength": 1,
+          "metadata": {
+              "description": "Name of this project"
+          }
+      }
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[parameters('FENSGName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "rdp_rule",
+            "properties": {
+              "description": "Allow RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[parameters('virtualNetworkName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkSecurityGroups/', parameters('FENSGName'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('addressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "FESubnetName",
+            "properties": {
+              "addressPrefix": "[parameters('FESubnetPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('FENSGName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('nsgdemostorageName')]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2015-05-01-preview",
+      "dependsOn": [ ],
+      "tags": {
+        "displayName": "nsgdemostorage"
+      },
+      "properties": {
+        "accountType": "[parameters('nsgdemostorageType')]"
+      }
+    },
+    {
+      "name": "[variables('FEPublicIPName')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "location": "[parameters('location')]",
+      "apiVersion": "2015-05-01-preview",
+      "dependsOn": [ ],
+      "tags": {
+        "displayName": "FEPublicIP"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('FEPublicIPDnsName')]"
+        }
+      }
+    },
+    {
+      "name": "[variables('fewinvmNicName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[parameters('location')]",
+      "apiVersion": "2015-05-01-preview",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', variables('FEPublicIPName'))]",
+        "[concat('Microsoft.Network/virtualNetworks/', parameters('virtualNetworkName'))]"
+      ],
+      "tags": {
+        "displayName": "fewinvmNic"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('FEPublicIPName'))]"
+              },
+              "subnet": {
+                "id": "[variables('fewinvmSubnetRef2')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[parameters('fewinvmName')]",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "[parameters('location')]",
+      "apiVersion": "2015-05-01-preview",
+      "dependsOn": [
+        "[concat('Microsoft.Storage/storageAccounts/', variables('nsgdemostorageName'))]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('fewinvmNicName'))]"
+      ],
+      "tags": {
+        "displayName": "fewinvm"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('fewinvmVmSize2')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('fewinvmName')]",
+          "adminUsername": "[parameters('fewinvmAdminUsername')]",
+          "adminPassword": "[parameters('fewinvmAdminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "[variables('fewinvmImagePublisher2')]",
+            "offer": "[variables('fewinvmImageOffer2')]",
+            "sku": "[parameters('fewinvmWindowsOSVersion')]",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "fewinvmOSDisk",
+            "vhd": {
+              "uri": "[concat('http://', variables('nsgdemostorageName'), '.blob.core.windows.net/', variables('fewinvmStorageAccountContainerName2'), '/', variables('fewinvmOSDiskName2'), '.vhd')]"
+            },
+            "caching": "ReadWrite",
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('fewinvmNicName'))]"
+            }
+          ]
+        }
+      },
+        "resources": [
+            {
+                "name": "MyExtension",
+                "type": "extensions",
+                "location": "[parameters('location')]",
+                "apiVersion": "2015-06-15",
+                "dependsOn": [
+                    "[concat('Microsoft.Compute/virtualMachines/', parameters('fewinvmName'))]"
+                ],
+                "tags": {
+                    "displayName": "MyExtension"
+                },
+                "properties": {
+                    "publisher": "Microsoft.Compute",
+                    "type": "CustomScriptExtension",
+                    "typeHandlerVersion": "1.4",
+                    "autoUpgradeMinorVersion": true,
+                    "settings": {
+                        "fileUris": [
+                            "[concat(parameters('_artifactsLocation'), '/', variables('MyExtensionScriptFolder'), '/', variables('MyExtensionScriptFileName'), parameters('_artifactsLocationSasToken'))]"
+                        ],
+                        "commandToExecute": "[concat('powershell -ExecutionPolicy Unrestricted -File ', variables('MyExtensionScriptFolder'), '/', variables('MyExtensionScriptFileName'))]"
+                    }
+                }
+            }
+        ]
+    }
+  ],
+  "variables": {
+    "nsgdemostorageName": "[concat('nsgstg', uniqueString(resourceGroup().id))]",
+    "FENicVnetID": "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
+    "FENicSubnetRef": "[concat(variables('FENicVnetID'), '/subnets/', 'FESubnetName')]",
+    "FEWinVMImagePublisher": "MicrosoftWindowsServer",
+    "FEWinVMImageOffer": "WindowsServer",
+    "FEWinVMOSDiskName": "FEWinVMOSDisk",
+    "FEWinVMVmSize": "Standard_D1",
+    "FEWinVMVnetID": "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
+    "FEWinVMSubnetRef": "[concat(variables('FEWinVMVnetID'), '/subnets/', 'FESubnetName')]",
+    "FEWinVMStorageAccountContainerName": "vhds",
+    "FEPublicIPName": "FEPublicIP",
+    "fewinvmImagePublisher2": "MicrosoftWindowsServer",
+    "fewinvmImageOffer2": "WindowsServer",
+    "fewinvmOSDiskName2": "fewinvmOSDisk",
+    "fewinvmVmSize2": "Standard_D1",
+    "fewinvmVnetID2": "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]",
+    "fewinvmSubnetRef2": "[concat(variables('fewinvmVnetID2'), '/subnets/', 'FESubnetName')]",
+    "fewinvmStorageAccountContainerName2": "vhds",
+    "fewinvmNicName": "[concat(parameters('fewinvmName'), 'NetworkInterface')]",
+      "MyExtensionScriptFolder": "[concat(parameters('projectName'), '/', 'CustomScripts')]",
+      "MyExtensionScriptFileName": "MyExtension.ps1"
+  }
+}
